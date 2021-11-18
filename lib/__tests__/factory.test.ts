@@ -1,4 +1,4 @@
-import { OnCreateFn, Factory, HookFn } from 'fishery';
+import { Factory, HookFn } from 'fishery';
 
 type User = {
   id: string;
@@ -6,17 +6,19 @@ type User = {
   address?: { city: string; state: string };
 };
 
-const userFactory = Factory.define<User>(({ onCreate, sequence }) => {
-  onCreate(user => user);
-  const name = 'Bob';
-  return {
-    id: `user-${sequence}`,
-    name,
-    address: {
-      city: 'Detroit',
-      state: 'MI',
-    },
-  };
+const userFactory = Factory.define<User>({
+  onCreate: user => user,
+  build: ({ sequence }) => {
+    const name = 'Bob';
+    return {
+      id: `user-${sequence}`,
+      name,
+      address: {
+        city: 'Detroit',
+        state: 'MI',
+      },
+    };
+  },
 });
 
 describe('factory.build', () => {
@@ -46,9 +48,11 @@ describe('factory.buildList', () => {
       user.name = 'Bill';
     });
 
-    const factory = Factory.define<User>(({ afterBuild }) => {
-      afterBuild(afterBuildFn);
-      return { id: '1', name: 'Ralph' };
+    const factory = Factory.define<User>({
+      build: () => {
+        return { id: '1', name: 'Ralph' };
+      },
+      afterBuild: afterBuildFn,
     });
 
     expect(factory.buildList(2).every(u => u.name === 'Bill')).toBeTruthy();
@@ -77,15 +81,14 @@ describe('factory.create', () => {
       id: number;
     };
 
-    const factory = Factory.define<UserBeforeSave, any, User>(
-      ({ onCreate }) => {
-        onCreate(async user => {
-          return { ...user, id: 2 };
-        });
-
+    const factory = Factory.define<UserBeforeSave, any, User>({
+      build: () => {
         return { name: 'Ralph' };
       },
-    );
+      onCreate: async user => {
+        return { ...user, id: 2 };
+      },
+    });
 
     const user = factory.build();
     const user2 = await factory.create();
@@ -114,9 +117,11 @@ describe('factory.createList', () => {
       return Promise.resolve(user);
     });
 
-    const factory = Factory.define<User>(({ onCreate }) => {
-      onCreate(onCreateFn);
-      return { id: '1', name: 'Ralph' };
+    const factory = Factory.define<User>({
+      build: ({}) => {
+        return { id: '1', name: 'Ralph' };
+      },
+      onCreate: onCreateFn,
     });
 
     const promise = factory.createList(2, { name: 'susan' });
@@ -130,44 +135,47 @@ describe('factory.createList', () => {
 
 describe('afterBuild', () => {
   it('passes the object for manipulation', () => {
-    const factory = Factory.define<User>(({ afterBuild }) => {
-      afterBuild(user => {
-        user.id = 'bla';
-      });
-
-      return { id: '1', name: 'Ralph' };
-    });
-
-    expect(factory.build().id).toEqual('bla');
-  });
-
-  describe('when not a function', () => {
-    it('raises an error', () => {
-      const factory = Factory.define<User>(({ afterBuild }) => {
-        afterBuild('5' as unknown as HookFn<User>);
+    const factory = Factory.define<User>({
+      build: () => {
         return { id: '1', name: 'Ralph' };
-      });
+      },
+      afterBuild: user => {
+        user.id = 'bla';
+      },
+    });
+    expect(factory.build().id).toEqual('bla');
 
-      expect(() => {
-        factory.build();
-      }).toThrowError(/must be a function/);
+    describe('when not a function', () => {
+      it('raises an error', () => {
+        const factory = Factory.define<User>({
+          build: () => {
+            return { id: '1', name: 'Ralph' };
+          },
+          afterBuild: '5' as unknown as HookFn<User, any>,
+        });
+
+        expect(() => {
+          factory.build();
+        }).toThrowError(/must be a function/);
+      });
     });
   });
-});
 
-describe('onCreate', () => {
-  it('defines a function that is called on create', async () => {
-    type User = { id: string };
-    const factory = Factory.define<User>(({ onCreate }) => {
-      onCreate(user => {
-        user.id = 'bla';
-        return Promise.resolve(user);
+  describe('onCreate', () => {
+    it('defines a function that is called on create', async () => {
+      type User = { id: string };
+      const factory = Factory.define<User>({
+        build: ({}) => {
+          return { id: '1' };
+        },
+        onCreate: user => {
+          user.id = 'bla';
+          return Promise.resolve(user);
+        },
       });
 
-      return { id: '1' };
+      const user = await factory.create();
+      expect(user.id).toEqual('bla');
     });
-
-    const user = await factory.create();
-    expect(user.id).toEqual('bla');
   });
 });

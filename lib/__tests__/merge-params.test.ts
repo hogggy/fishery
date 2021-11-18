@@ -10,9 +10,11 @@ describe('merging params', () => {
     };
 
     it('preserves nested objects when merging trait-supplied params with build()-supplied', () => {
-      const userFactory = Factory.define<User>(() => ({
-        attributes: { registered: true },
-      }));
+      const userFactory = Factory.define<User>({
+        build: () => ({
+          attributes: { registered: true },
+        }),
+      });
 
       const user = userFactory
         .params({ attributes: { admin: true } })
@@ -25,9 +27,11 @@ describe('merging params', () => {
     });
 
     it('preserves nested objects when merging trait-supplied params into each other', () => {
-      const userFactory = Factory.define<User>(() => ({
-        attributes: { registered: true },
-      }));
+      const userFactory = Factory.define<User>({
+        build: () => ({
+          attributes: { registered: true },
+        }),
+      });
       const user = userFactory
         .params({ attributes: { admin: true } })
         .params({ attributes: { registered: false } })
@@ -41,9 +45,11 @@ describe('merging params', () => {
   });
 
   describe('factory.tuples', () => {
-    const tupleFactory = Factory.define<{ items: [string] }>(() => ({
-      items: ['STRING'],
-    }));
+    const tupleFactory = Factory.define<{ items: [string] }>({
+      build: () => ({
+        items: ['STRING'],
+      }),
+    });
 
     it('builds a tuple with default value', () => {
       expect(tupleFactory.build().items).toEqual(['STRING']);
@@ -56,15 +62,17 @@ describe('merging params', () => {
 
     it('overrides the tuple when passed to build', () => {
       expect(
-        Factory.define<[string]>(() => ['STRING']).build(['VALUE']),
+        Factory.define<[string]>({ build: () => ['STRING'] }).build(['VALUE']),
       ).toEqual(['VALUE']);
     });
   });
 
   describe('factory.arrays', () => {
-    const arrayFactory = Factory.define<{ items: string[] }>(() => ({
-      items: ['STRING'],
-    }));
+    const arrayFactory = Factory.define<{ items: string[] }>({
+      build: () => ({
+        items: ['STRING'],
+      }),
+    });
 
     it('builds an empty array of strings', () => {
       expect(arrayFactory.build({ items: [] }).items).toEqual([]);
@@ -84,48 +92,22 @@ describe('merging params', () => {
         name: string;
       };
 
-      const arrayFactory = Factory.define<{ users: User[] }>(() => ({
-        users: [{ id: '1', name: 'Oscar' }],
-      }));
+      const arrayFactory = Factory.define<{ users: User[] }>({
+        build: () => ({
+          users: [{ id: '1', name: 'Oscar' }],
+        }),
+      });
 
       // @ts-expect-error
       arrayFactory.build({ users: [{ id: '2' }] });
     });
 
     it('correctly types "params" in the factory to the full array with no compiler error', () => {
-      Factory.define<{ items: string[] }>(({ params }) => ({
-        items: params.items || ['hello'],
-      }));
-    });
-  });
-
-  describe('factories.undefined', () => {
-    it('overrides the initial value', () => {
-      type User = { name?: string };
-      const userFactory = Factory.define<User>(() => ({ name: 'Ann' }));
-      expect(userFactory.build({ name: undefined }).name).toBeUndefined();
-    });
-
-    it('overrides an initial falsy value', () => {
-      type User = { registered?: boolean };
-      const userFactory = Factory.define<User>(() => ({ registered: false }));
-      expect(
-        userFactory.build({ registered: undefined }).registered,
-      ).toBeUndefined();
-    });
-
-    it('overrides an initial null value', () => {
-      type User = { registered?: boolean | null };
-      const userFactory = Factory.define<User>(() => ({ registered: null }));
-      expect(
-        userFactory.build({ registered: undefined }).registered,
-      ).toBeUndefined();
-    });
-
-    it('can be overridden by falsy value', () => {
-      type User = { name?: string | null };
-      const userFactory = Factory.define<User>(() => ({ name: undefined }));
-      expect(userFactory.build({ name: null }).name).toBeNull();
+      Factory.define<{ items: string[] }>({
+        build: ({ params }) => ({
+          items: params.items || ['hello'],
+        }),
+      });
     });
   });
 
@@ -136,9 +118,11 @@ describe('merging params', () => {
         somethingOptional?: unknown;
       }
 
-      const userFactory = Factory.define<User>(() => ({
-        something: 'blah',
-      }));
+      const userFactory = Factory.define<User>({
+        build: () => ({
+          something: 'blah',
+        }),
+      });
 
       userFactory.build({ something: 1, somethingOptional: 'sdf' });
       userFactory.build();
@@ -159,17 +143,21 @@ describe('merging params', () => {
         _permissions: unknown;
       }
 
-      const entity2Factory = Factory.define<Entity2>(() => ({
-        id: 'abc',
-        entity3: [],
-        entity3Optional: [],
-      }));
+      const entity2Factory = Factory.define<Entity2>({
+        build: () => ({
+          id: 'abc',
+          entity3: [],
+          entity3Optional: [],
+        }),
+      });
 
       const entity2 = entity2Factory.build();
 
-      const entity1Factory = Factory.define<Entity1>(() => ({
-        entity2: entity2Factory.build(),
-      }));
+      const entity1Factory = Factory.define<Entity1>({
+        build: () => ({
+          entity2: entity2Factory.build(),
+        }),
+      });
 
       entity1Factory.build({ entity2: entity2 });
     });
@@ -183,16 +171,20 @@ describe('merging params', () => {
         entity3: { _permissions: unknown };
       }
 
-      const entity2Factory = Factory.define<Entity2>(() => ({
-        id: 'abc',
-        entity3: { _permissions: 'foo' },
-      }));
+      const entity2Factory = Factory.define<Entity2>({
+        build: () => ({
+          id: 'abc',
+          entity3: { _permissions: 'foo' },
+        }),
+      });
 
       const entity2 = entity2Factory.build();
 
-      const entity1Factory = Factory.define<Entity1>(() => ({
-        entity2: entity2Factory.build(),
-      }));
+      const entity1Factory = Factory.define<Entity1>({
+        build: () => ({
+          entity2: entity2Factory.build(),
+        }),
+      });
 
       entity1Factory.build({ entity2 });
     });

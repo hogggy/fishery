@@ -14,8 +14,8 @@ describe('Transient params', () => {
     name: string;
   }
 
-  const userFactory = Factory.define<User, UserTransientParams>(
-    ({ transientParams }) => {
+  const userFactory = Factory.define<User, UserTransientParams>({
+    build: ({ transientParams }) => {
       const {
         name = 'Sharon Jones',
         city = 'Grand Rapids',
@@ -35,7 +35,7 @@ describe('Transient params', () => {
         },
       };
     },
-  );
+  });
 
   const factories = {
     user: userFactory,

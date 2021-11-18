@@ -7,14 +7,15 @@ describe('Using with classes', () => {
 
   class User {
     constructor(readonly name: string, public address?: Address) {}
+
     greet() {
       return `Hello, ${this.name}`;
     }
   }
 
-  const userFactory = Factory.define<User>(
-    () => new User('Sharon', new Address('Detroit', 'MI')),
-  );
+  const userFactory = Factory.define<User>({
+    build: () => new User('Sharon', new Address('Detroit', 'MI')),
+  });
 
   it('works correctly with read-only properties', () => {
     const user = userFactory.build();

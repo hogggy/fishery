@@ -53,12 +53,14 @@
   "devDependencies": {
     "@types/jest": "^26.0.20",
     "@types/lodash.mergewith": "^4.6.6",
+    "@types/lodash.tointeger": "^4.0.6",
     "jest": "^26.6.3",
     "prettier": "^2.2.1",
     "ts-jest": "^26.4.4",
     "typescript": "^3.9.5"
   },
   "dependencies": {
-    "lodash.mergewith": "^4.6.2"
+    "lodash.mergewith": "^4.6.2",
+    "lodash.tointeger": "^4.0.4"
   }
 }

@@ -12,30 +12,30 @@ interface User {
 
 describe('associations', () => {
   it('can create bi-directional has-many/belongs-to associations', () => {
-    const userFactory = Factory.define<User>(
-      ({ afterBuild, transientParams }) => {
-        const { skipPosts } = transientParams;
-
-        afterBuild(user => {
-          if (!skipPosts) {
-            user.posts.push(postFactory.build({}, { associations: { user } }));
-          }
-        });
-
+    const postFactory = Factory.define<Post>({
+      build: ({ associations }) => {
+        return {
+          title: 'A Post',
+          user:
+            associations.user ||
+            userFactory.build({}, { transient: { skipPosts: true } }),
+        };
+      },
+    });
+    const userFactory = Factory.define<User>({
+      build: params => {
         return {
           name: 'Bob',
           posts: [],
         };
       },
-    );
+      afterBuild: (user, { transientParams }) => {
+        const { skipPosts } = transientParams;
 
-    const postFactory = Factory.define<Post>(({ associations }) => {
-      return {
-        title: 'A Post',
-        user:
-          associations.user ||
-          userFactory.build({}, { transient: { skipPosts: true } }),
-      };
+        if (!skipPosts) {
+          user.posts.push(postFactory.build({}, { associations: { user } }));
+        }
+      },
     });
 
     const user = userFactory.build();

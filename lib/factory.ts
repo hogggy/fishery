@@ -1,63 +1,115 @@
-import {
-  DeepPartial,
-  GeneratorFn,
-  BuildOptions,
-  GeneratorFnOptions,
-  HookFn,
-  OnCreateFn,
-  AfterCreateFn,
-} from './types';
-import { FactoryBuilder } from './builder';
 import { merge, mergeCustomizer } from './merge';
+import toInteger from 'lodash.tointeger';
+import {
+  AfterCreateFn,
+  BuildOptions,
+  DeepPartial,
+  FunctionOptions,
+  HookFn,
+  OnBuildFn,
+  OnCreateFn,
+} from './types';
 
 const SEQUENCE_START_VALUE = 1;
 
 export class Factory<T, I = any, C = T> {
   // id is an object so it is shared between extended factories
   private id: { value: number } = { value: SEQUENCE_START_VALUE };
-
-  private _afterBuilds: HookFn<T>[] = [];
-  private _afterCreates: AfterCreateFn<C>[] = [];
-  private _onCreate?: OnCreateFn<T, C>;
+  private _afterBuilds: HookFn<T, I>[] = [];
+  private _afterCreates: AfterCreateFn<T, I, C>[] = [];
   private _associations: Partial<T> = {};
   private _params: DeepPartial<T> = {};
   private _transient: Partial<I> = {};
 
   constructor(
-    private readonly generator: (opts: GeneratorFnOptions<T, I, C>) => T,
-  ) {}
+    private _build: OnBuildFn<T, I>,
+    private _onCreate?: OnCreateFn<T, I, C>,
+    afterBuild?: HookFn<T, I>,
+    afterCreate?: AfterCreateFn<T, I, C>,
+  ) {
+    if (afterBuild) {
+      this._afterBuilds.push(afterBuild);
+    }
+    if (afterCreate) {
+      this._afterCreates.push(afterCreate);
+    }
+  }
 
   /**
    * Define a factory.
    * @template T The object the factory builds
    * @template I The transient parameters that your factory supports
    * @template C The class of the factory object being created.
-   * @param generator - your factory function
+   * @param build - your factory build function
+   * @param onCreate - (optional) your async factory create function
+   * @param afterBuild - (optional) runs after build
+   * @param afterCreate - (optional) runs after create
    */
   static define<T, I = any, C = T, F = Factory<T, I, C>>(
-    this: new (generator: GeneratorFn<T, I, C>) => F,
-    generator: GeneratorFn<T, I, C>,
+    this: new (
+      build: OnBuildFn<T, I>,
+      onCreate?: OnCreateFn<T, I, C>,
+      afterBuild?: HookFn<T, I>,
+      afterCreate?: AfterCreateFn<T, I, C>,
+    ) => F,
+    {
+      build,
+      onCreate,
+      afterBuild,
+      afterCreate,
+    }: {
+      build: OnBuildFn<T, I>;
+      onCreate?: OnCreateFn<T, I, C>;
+      afterBuild?: HookFn<T, I>;
+      afterCreate?: AfterCreateFn<T, I, C>;
+    },
   ): F {
-    return new this(generator);
+    return new this(build, onCreate, afterBuild, afterCreate);
+  }
+
+  private _getOptionsFromBuildOptions(buildOptions: BuildOptions<T, I> = {}) {
+    const { transient = {}, associations = {} } = buildOptions;
+    const options: FunctionOptions<T, I> = {
+      sequence: this.sequence(),
+      associations: merge(this._associations, associations, mergeCustomizer),
+      transientParams: merge(this._transient, transient, mergeCustomizer),
+    };
+    return options;
   }
 
   /**
    * Build an object using your factory
    * @param params
-   * @param options
+   * @param buildOptions
    */
-  build(params: DeepPartial<T> = {}, options: BuildOptions<T, I> = {}): T {
-    return this.builder(params, options).build();
+  build(params?: DeepPartial<T>, buildOptions: BuildOptions<T, I> = {}): T {
+    const options = this._getOptionsFromBuildOptions(buildOptions);
+    const mergedParams = merge(params, this._params, mergeCustomizer);
+    const built = this._build({ params: mergedParams, ...options });
+    const merged = merge(
+      built,
+      mergedParams,
+      buildOptions.associations,
+      mergeCustomizer,
+    );
+    this._afterBuilds.forEach(afterBuild => {
+      if (typeof afterBuild === 'function') {
+        afterBuild(merged, options);
+      } else {
+        throw new Error('"afterBuild" must be a function');
+      }
+    });
+    return merged;
   }
 
   buildList(
     number: number,
     params: DeepPartial<T> = {},
-    options: BuildOptions<T, I> = {},
+    buildOptions: BuildOptions<T, I> = {},
   ): T[] {
     let list: T[] = [];
     for (let i = 0; i < number; i++) {
-      list.push(this.build(params, options));
+      list.push(this.build(params, buildOptions));
     }
 
     return list;
@@ -66,20 +118,36 @@ export class Factory<T, I = any, C = T> {
   /**
    * Asynchronously create an object using your factory.
    * @param params
-   * @param options
+   * @param buildOptions
    */
   async create(
     params: DeepPartial<T> = {},
-    options: BuildOptions<T, I> = {},
+    buildOptions: BuildOptions<T, I> = {},
   ): Promise<C> {
-    return this.builder(params, options).create();
+    const options = this._getOptionsFromBuildOptions(buildOptions);
+    const built = this.build(params, options);
+    if (!this._onCreate) {
+      throw new Error('Attempted to call `create`, but no onCreate defined');
+    }
+    const created = await this._onCreate(built, options);
+    await Promise.all(
+      this._afterCreates.map(async afterCreate => {
+        if (typeof afterCreate === 'function') {
+          await afterCreate(created, options);
+        } else {
+          throw new Error('"afterBuild" must be a function');
+        }
+      }),
+    );
+    return created;
   }
 
   async createList(
     number: number,
     params: DeepPartial<T> = {},
-    options: BuildOptions<T, I> = {},
+    buildOptions: BuildOptions<T, I> = {},
   ): Promise<C[]> {
+    const options = this._getOptionsFromBuildOptions(buildOptions);
     let list: Promise<C>[] = [];
     for (let i = 0; i < number; i++) {
       list.push(this.create(params, options));
@@ -93,7 +161,7 @@ export class Factory<T, I = any, C = T> {
    * @param afterBuildFn - the function to call. It accepts your object of type T. The value this function returns gets returned from "build"
    * @returns a new factory
    */
-  afterBuild(afterBuildFn: HookFn<T>): this {
+  afterBuild(afterBuildFn: HookFn<T, I>): this {
     const factory = this.clone();
     factory._afterBuilds.push(afterBuildFn);
     return factory;
@@ -107,7 +175,7 @@ export class Factory<T, I = any, C = T> {
    * `afterCreate`s are run
    * @return a new factory
    */
-  onCreate(onCreateFn: OnCreateFn<T, C>): this {
+  onCreate(onCreateFn: OnCreateFn<T, I, C>): this {
     const factory = this.clone();
     factory._onCreate = onCreateFn;
     return factory;
@@ -119,7 +187,7 @@ export class Factory<T, I = any, C = T> {
    * @param afterCreateFn
    * @return a new factory
    */
-  afterCreate(afterCreateFn: AfterCreateFn<C>): this {
+  afterCreate(afterCreateFn: AfterCreateFn<T, I, C>): this {
     const factory = this.clone();
     factory._afterCreates.push(afterCreateFn);
     return factory;
@@ -167,31 +235,21 @@ export class Factory<T, I = any, C = T> {
 
   protected clone<F extends Factory<T, I, C>>(this: F): F {
     const copy = new (this.constructor as {
-      new (generator: GeneratorFn<T, I, C>): F;
-    })(this.generator);
+      new (
+        build: OnBuildFn<T, I>,
+        onCreate?: OnCreateFn<T, I, C>,
+        afterBuild?: HookFn<T, I>,
+        afterCreate?: AfterCreateFn<T, I, C>,
+      ): F;
+    })(this._build, this._onCreate);
     Object.assign(copy, this);
     copy._afterCreates = [...this._afterCreates];
     copy._afterBuilds = [...this._afterBuilds];
+
     return copy;
   }
 
   protected sequence() {
     return this.id.value++;
-  }
-
-  protected builder(
-    params: DeepPartial<T> = {},
-    options: BuildOptions<T, I> = {},
-  ) {
-    return new FactoryBuilder<T, I, C>(
-      this.generator,
-      this.sequence(),
-      merge({}, this._params, params, mergeCustomizer),
-      { ...this._transient, ...options.transient },
-      { ...this._associations, ...options.associations },
-      this._afterBuilds,
-      this._afterCreates,
-      this._onCreate,
-    );
   }
 }

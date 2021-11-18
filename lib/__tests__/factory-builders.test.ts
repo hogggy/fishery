@@ -13,9 +13,10 @@ type User = {
   post: Post;
 };
 
-const postFactory = Factory.define<Post>(() => ({ id: '1' }));
+const postFactory = Factory.define<Post>({ build: () => ({ id: '1' }) });
 
 type TransientParams = { registered: boolean };
+
 class UserFactory extends Factory<User, TransientParams> {
   admin(adminId = '') {
     return this.params({
@@ -29,20 +30,22 @@ class UserFactory extends Factory<User, TransientParams> {
   }
 }
 
-const userFactory = UserFactory.define(({ associations, transientParams }) => {
-  const { registered = false } = transientParams;
-  const memberId = registered ? '1' : null;
+const userFactory = UserFactory.define({
+  build: ({ associations, transientParams }) => {
+    const { registered = false } = transientParams;
+    const memberId = registered ? '1' : null;
 
-  return {
-    id: '1',
-    admin: false,
-    adminId: null,
-    firstName: 'Yussef',
-    lastName: 'Sanchez',
-    registered,
-    memberId,
-    post: associations.post || postFactory.build(),
-  };
+    return {
+      id: '1',
+      admin: false,
+      adminId: null,
+      firstName: 'Yussef',
+      lastName: 'Sanchez',
+      registered,
+      memberId,
+      post: associations.post || postFactory.build(),
+    };
+  },
 });
 
 describe('afterBuild', () => {
@@ -53,7 +56,11 @@ describe('afterBuild', () => {
     });
     const user = userFactory.afterBuild(afterBuild).build();
     expect(user.id).toEqual('123');
-    expect(afterBuild).toHaveBeenCalledWith(user);
+    expect(afterBuild).toHaveBeenCalledWith(user, {
+      associations: {},
+      sequence: 1,
+      transientParams: {},
+    });
   });
 
   it('calls chained or inherited afterBuilds sequentially', () => {
@@ -86,9 +93,11 @@ describe('afterBuild', () => {
     });
 
     type User = { id: string };
-    const userFactory = Factory.define<User>(({ afterBuild }) => {
-      afterBuild(afterBuildGenerator);
-      return { id: '1' };
+    const userFactory = Factory.define<User>({
+      build: () => {
+        return { id: '1' };
+      },
+      afterBuild: afterBuildGenerator,
     });
 
     const user = userFactory.afterBuild(afterBuildBuilder).build();
@@ -112,7 +121,7 @@ describe('afterBuild', () => {
 describe('onCreate', () => {
   it('defines a function that is called on create', async () => {
     type User = { id: string };
-    const factory = Factory.define<User>(() => ({ id: '1' }));
+    const factory = Factory.define<User>({ build: () => ({ id: '1' }) });
 
     const user = await factory
       .onCreate(user => {
@@ -125,13 +134,14 @@ describe('onCreate', () => {
 
   it('overrides onCreate from the generator', async () => {
     type User = { id: string };
-    const factory = Factory.define<User>(({ onCreate }) => {
-      onCreate(user => {
+    const factory = Factory.define<User>({
+      build: () => {
+        return { id: '1' };
+      },
+      onCreate: user => {
         user.id = 'generator';
         return user;
-      });
-
-      return { id: '1' };
+      },
     });
 
     const user = await factory
@@ -145,7 +155,7 @@ describe('onCreate', () => {
 
   it('raises an error if onCreate was not defined', async () => {
     type User = { id: string };
-    const factory = Factory.define<User>(() => ({ id: '1' }));
+    const factory = Factory.define<User>({ build: () => ({ id: '1' }) });
 
     await expect(() => factory.create()).rejects.toHaveProperty(
       'message',
@@ -157,7 +167,7 @@ describe('onCreate', () => {
 describe('afterCreate', () => {
   it('defines a function that is called after the onCreate', async () => {
     type User = { id: string };
-    const factory = Factory.define<User>(() => ({ id: '1' }));
+    const factory = Factory.define<User>({ build: () => ({ id: '1' }) });
     const afterCreate = jest.fn(user => {
       user.id = 'afterCreate';
       return Promise.resolve(user);
@@ -176,7 +186,7 @@ describe('afterCreate', () => {
 
   it('calls chained or inherited afterCreates sequentially', async () => {
     type User = { id: string };
-    const factory = Factory.define<User>(() => ({ id: '1' }));
+    const factory = Factory.define<User>({ build: () => ({ id: '1' }) });
 
     const afterCreate1 = jest.fn(async user => {
       user.id = 'afterCreate1';
@@ -210,10 +220,12 @@ describe('afterCreate', () => {
     });
 
     type User = { id: string };
-    const userFactory = Factory.define<User>(({ afterCreate, onCreate }) => {
-      onCreate(user => user);
-      afterCreate(afterCreateGenerator);
-      return { id: '1', name: '1' };
+    const userFactory = Factory.define<User>({
+      build: () => {
+        return { id: '1', name: '1' };
+      },
+      onCreate: user => user,
+      afterCreate: afterCreateGenerator,
     });
 
     const user = await userFactory.afterCreate(afterCreateBuilder).create();
@@ -224,7 +236,7 @@ describe('afterCreate', () => {
 
   it('chains return values from afterCreate hooks', async () => {
     type User = { id: string };
-    const factory = Factory.define<User>(() => ({ id: '1' }));
+    const factory = Factory.define<User>({ build: () => ({ id: '1' }) });
 
     const afterCreate1 = jest.fn(async (user: User) => {
       user.id = 'afterCreate1';
