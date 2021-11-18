@@ -56,7 +56,7 @@ var __spreadArrays = (this && this.__spreadArrays) || function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.Factory = void 0;
 var merge_1 = require("./merge");
-var SEQUENCE_START_VALUE = 1;
+var SEQUENCE_START_VALUE = 20;
 var Factory = /** @class */ (function () {
     function Factory(_build, _onCreate, afterBuild, afterCreate) {
         this._build = _build;
@@ -265,7 +265,8 @@ var Factory = /** @class */ (function () {
         return copy;
     };
     Factory.prototype.sequence = function () {
-        return this.id.value++;
+        this.id.value += SEQUENCE_START_VALUE;
+        return this.id.value;
     };
     return Factory;
 }());

@@ -60,7 +60,6 @@
     "typescript": "^3.9.5"
   },
   "dependencies": {
-    "lodash.mergewith": "^4.6.2",
-    "lodash.tointeger": "^4.0.4"
+    "lodash.mergewith": "^4.6.2"
   }
 }

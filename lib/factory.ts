@@ -1,5 +1,4 @@
 import { merge, mergeCustomizer } from './merge';
-import toInteger from 'lodash.tointeger';
 import {
   AfterCreateFn,
   BuildOptions,
@@ -10,7 +9,7 @@ import {
   OnCreateFn,
 } from './types';
 
-const SEQUENCE_START_VALUE = 1;
+const SEQUENCE_START_VALUE = 20;
 
 export class Factory<T, I = any, C = T> {
   // id is an object so it is shared between extended factories
@@ -250,6 +249,7 @@ export class Factory<T, I = any, C = T> {
   }
 
   protected sequence() {
-    return this.id.value++;
+    this.id.value += SEQUENCE_START_VALUE;
+    return this.id.value;
   }
 }
